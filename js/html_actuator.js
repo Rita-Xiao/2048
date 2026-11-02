@@ -4,6 +4,9 @@ function HTMLActuator() {
   this.bestContainer    = document.querySelector(".best-container");
   this.messageContainer = document.querySelector(".game-message");
 
+  this.mergeEffects = document.querySelector(".merge-effects");
+  this.mergeAnnouncement = document.querySelector(".merge-announcement");
+  this.feedbackIndex = 0;
   this.score = 0;
 }
 
@@ -13,13 +16,22 @@ HTMLActuator.prototype.actuate = function (grid, metadata) {
   window.requestAnimationFrame(function () {
     self.clearContainer(self.tileContainer);
 
+    var matches = 0;
     grid.cells.forEach(function (column) {
       column.forEach(function (cell) {
         if (cell) {
           self.addTile(cell);
+          if (cell.mergedFrom) {
+            self.showMergeFeedback(cell);
+            matches++;
+          }
         }
       });
     });
+
+    if (matches) {
+      self.mergeAnnouncement.textContent = MeadowLanguage.announcement(matches);
+    }
 
     self.updateScore(metadata.score);
     self.updateBestScore(metadata.bestScore);
@@ -38,6 +50,8 @@ HTMLActuator.prototype.actuate = function (grid, metadata) {
 // Continues the game (both restart and keep playing)
 HTMLActuator.prototype.continueGame = function () {
   this.clearMessage();
+  this.clearContainer(this.mergeEffects);
+  this.mergeAnnouncement.textContent = "";
 };
 
 HTMLActuator.prototype.clearContainer = function (container) {
@@ -90,6 +104,29 @@ HTMLActuator.prototype.addTile = function (tile) {
   this.tileContainer.appendChild(wrapper);
 };
 
+// Effects live outside the tile layer so quick moves do not cut them short.
+HTMLActuator.prototype.showMergeFeedback = function (tile) {
+  var responses = MeadowLanguage.text("responses");
+  var effect = document.createElement("div");
+  var chip = document.createElement("span");
+  effect.className = "merge-feedback " + this.positionClass(tile);
+  chip.className = "merge-chip";
+  var responseIndex = this.feedbackIndex % responses.length;
+  chip.setAttribute("data-feedback-index", responseIndex);
+  chip.textContent = "♡ " + responses[responseIndex];
+  this.feedbackIndex++;
+  effect.appendChild(chip);
+  this.mergeEffects.appendChild(effect);
+
+  // Bound the decoration count even during very fast keyboard play.
+  if (this.mergeEffects.children.length > 32) {
+    this.mergeEffects.removeChild(this.mergeEffects.firstChild);
+  }
+  window.setTimeout(function () {
+    if (effect.parentNode) effect.parentNode.removeChild(effect);
+  }, 1000);
+};
+
 HTMLActuator.prototype.applyClasses = function (element, classes) {
   element.setAttribute("class", classes.join(" "));
 };
@@ -126,10 +163,13 @@ HTMLActuator.prototype.updateBestScore = function (bestScore) {
 
 HTMLActuator.prototype.message = function (won) {
   var type    = won ? "game-won" : "game-over";
-  var message = won ? "You win!" : "Game over!";
+  var messageKey = won ? "won" : "over";
+  var message = MeadowLanguage.text(messageKey);
 
   this.messageContainer.classList.add(type);
-  this.messageContainer.getElementsByTagName("p")[0].textContent = message;
+  var paragraph = this.messageContainer.getElementsByTagName("p")[0];
+  paragraph.setAttribute("data-i18n", messageKey);
+  paragraph.textContent = message;
 };
 
 HTMLActuator.prototype.clearMessage = function () {
